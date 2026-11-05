@@ -192,7 +192,7 @@ private struct GeneralSettingsView: View {
 
                 Divider()
 
-                settingsSection("Presets & Limits", subtitle: "Set the scale limit and your quick-start timers.") {
+                settingsSection("Presets & Limits", subtitle: "Set the scale limit and your quick timers.") {
                     HStack(spacing: 14) {
                         HStack(spacing: 6) {
                             Text("Scale limit")
@@ -316,37 +316,42 @@ private struct AboutTomatiView: View {
 private struct WhatsNewView: View {
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("What’s New")
-                        .font(.title2.bold())
-                    Text("Tomati 2.1")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            VStack(alignment: .leading, spacing: 22) {
+                Text("What’s New")
+                    .font(.title2.bold())
 
-                whatsNewRow(
-                    icon: "slider.horizontal.3",
-                    title: "Compact time picker",
-                    description: "Choose a duration faster with a denser draggable minute scale."
+                release(
+                    version: "2.1.5",
+                    summary: "A focused refinement of the timer and release history.",
+                    changes: [
+                        "Animated the minute scale while choosing a duration.",
+                        "Simplified session cards.",
+                        "Added a compact release history."
+                    ]
                 )
 
-                whatsNewRow(
-                    icon: "square.grid.2x2",
-                    title: "Grouped presets",
-                    description: "Quick presets now live inside a single compact menu."
+                release(
+                    version: "2.1",
+                    summary: "A faster timer picker, clearer Settings, and secure updates.",
+                    changes: [
+                        "Made the minute scale compact and draggable.",
+                        "Grouped presets into a single menu.",
+                        "Simplified Sessions and aligned System controls.",
+                        "Added update checks with Sparkle.",
+                        "Added clean defaults for Debug runs."
+                    ]
                 )
 
-                whatsNewRow(
-                    icon: "arrow.triangle.2.circlepath",
-                    title: "Built-in updates",
-                    description: "Check for new versions directly from About Tomati."
-                )
-
-                whatsNewRow(
-                    icon: "sidebar.left",
-                    title: "Cleaner Settings",
-                    description: "Sessions and system controls are simpler and more consistent."
+                release(
+                    version: "1.0",
+                    summary: "Tomati arrives as a compact focus timer for the macOS menu bar.",
+                    changes: [
+                        "Choose any timer duration or use a preset.",
+                        "Create focus sessions with automatic breaks.",
+                        "Pause, resume, reset, and follow overtime.",
+                        "Personalize the accent, sounds, and menu bar icon.",
+                        "Keep the timer visible without occupying the Dock."
+                    ]
                 )
             }
             .padding(.horizontal, 22)
@@ -355,21 +360,27 @@ private struct WhatsNewView: View {
         }
     }
 
-    private func whatsNewRow(icon: String, title: String, description: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.tint)
-                .frame(width: 26, height: 26)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 7))
+    private func release(version: String, summary: String, changes: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(version)
+                .font(.headline)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text(summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(changes, id: \.self) { change in
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        Text("•")
+                            .foregroundStyle(.tertiary)
+                        Text(change)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
         }
     }
@@ -668,12 +679,6 @@ private struct SessionEditorCard: View {
         }
         .padding(11)
         .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(alignment: .leading) {
-            Capsule()
-                .fill(session.accentColor)
-                .frame(width: 3)
-                .padding(.vertical, 8)
-        }
     }
 
     private func sessionDurationField(_ title: String, value: Binding<Double>) -> some View {

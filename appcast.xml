@@ -3,6 +3,32 @@
     <channel>
         <title>Tomati</title>
         <item>
+            <title>2.1.5</title>
+            <pubDate>Thu, 05 Nov 2026 10:22:54 -0600</pubDate>
+            <link>https://github.com/emilianooowo/Tomati</link>
+            <sparkle:version>4</sparkle:version>
+            <sparkle:shortVersionString>2.1.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <description sparkle:format="markdown"><![CDATA[## What’s New in Tomati 2.1.5
+
+Tomati 2.1.5 refines time selection, simplifies release information, and expands compatibility.
+
+### New
+
+- Added an animated magnifier to the minute scale.
+- Added a compact release history for Tomati 1.0, 2.1, and 2.1.5.
+
+### Improvements
+
+- The minute scale now responds smoothly to hover and dragging.
+- Session cards no longer show a color bar on the left margin.
+- The README now has a centered, minimal presentation and clearer installation steps.
+- The minimum supported system is now macOS 14 Sonoma.
+]]></description>
+            <enclosure url="https://github.com/emilianooowo/Tomati/releases/download/Tomati-2.1.5/Tomati-2.1.5.zip" length="1384323" type="application/octet-stream" sparkle:edSignature="mHV26Xu1g8fYtfpT4O+QK8eWQEKq4dB9bO8Xp6RoGj2is3zd9KXSUJW5cZOu2/pkyylV05RvG/9gH+A/u98pAg=="/>
+        </item>
+        <item>
             <title>2.1.0</title>
             <pubDate>Thu, 05 Nov 2026 09:46:43 -0600</pubDate>
             <link>https://github.com/emilianooowo/Tomati</link>

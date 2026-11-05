@@ -67,6 +67,8 @@ private struct DraggableMinuteScale: View {
 
     @State private var dragOriginMinutes: Double?
     @State private var visualMinutes: Double = 0
+    @State private var isDragging = false
+    @State private var isHovering = false
 
     private let pointsPerMinute: CGFloat = 3.2
 
@@ -74,37 +76,73 @@ private struct DraggableMinuteScale: View {
         min(Double(maximumMinutes), max(0, minutes))
     }
 
+    private func drawScale(
+        context: inout GraphicsContext,
+        size: CGSize,
+        magnification: CGFloat = 1,
+        insideLens: Bool = false
+    ) {
+        let centerX = size.width / 2
+        let minuteSpacing = pointsPerMinute * magnification
+        let visibleMinuteCount = Int(ceil(size.width / minuteSpacing / 2)) + 2
+        let firstMinute = max(1, Int(floor(visualMinutes)) - visibleMinuteCount)
+        let lastMinute = min(maximumMinutes, Int(ceil(visualMinutes)) + visibleMinuteCount)
+
+        guard firstMinute <= lastMinute else { return }
+
+        for minute in firstMinute...lastMinute {
+            let isMajor = minute.isMultiple(of: 5)
+            let distanceFromSelection = abs(CGFloat(minute) - CGFloat(visualMinutes))
+            let proximity = max(0, 1 - (distanceFromSelection / 5))
+            let interactionScale: CGFloat = isDragging ? 1 : (isHovering ? 0.55 : 0)
+            let x = centerX + (CGFloat(minute) - CGFloat(visualMinutes)) * minuteSpacing
+            let baseHeight: CGFloat = isMajor ? 11 : 7
+            let lensBoost: CGFloat = insideLens ? 3 : 0
+            let height = baseHeight + lensBoost + (3 * proximity * interactionScale)
+            let baseOpacity: Double = isMajor ? 0.38 : 0.22
+            let lensOpacity: Double = insideLens ? 0.2 : 0
+            let opacity = min(1, baseOpacity + lensOpacity + (0.28 * Double(proximity) * Double(interactionScale)))
+            let isSelectedTick = insideLens && distanceFromSelection < 0.38
+
+            var tick = Path()
+            tick.move(to: CGPoint(x: x, y: (size.height - height) / 2))
+            tick.addLine(to: CGPoint(x: x, y: (size.height + height) / 2))
+            context.stroke(
+                tick,
+                with: .color(isSelectedTick ? accentColor : Color.primary.opacity(opacity)),
+                lineWidth: isSelectedTick ? 2 : 1.5
+            )
+        }
+    }
+
     var body: some View {
         GeometryReader { _ in
             ZStack {
                 Canvas { context, size in
-                    let centerX = size.width / 2
-                    let visibleMinuteCount = Int(ceil(size.width / pointsPerMinute / 2)) + 2
-                    let firstMinute = max(1, Int(floor(visualMinutes)) - visibleMinuteCount)
-                    let lastMinute = min(maximumMinutes, Int(ceil(visualMinutes)) + visibleMinuteCount)
-
-                    if firstMinute <= lastMinute {
-                        for minute in firstMinute...lastMinute {
-                            let isMajor = minute.isMultiple(of: 5)
-                            let x = centerX + (CGFloat(minute) - CGFloat(visualMinutes)) * pointsPerMinute
-                            let height: CGFloat = isMajor ? 11 : 7
-                            var tick = Path()
-                            tick.move(to: CGPoint(x: x, y: (size.height - height) / 2))
-                            tick.addLine(to: CGPoint(x: x, y: (size.height + height) / 2))
-                            context.stroke(
-                                tick,
-                                with: .color(Color.primary.opacity(isMajor ? 0.38 : 0.22)),
-                                lineWidth: 1.5
-                            )
-                        }
-                    }
+                    drawScale(context: &context, size: size)
                 }
+
+                Canvas { context, size in
+                    drawScale(context: &context, size: size, magnification: 1.8, insideLens: true)
+                }
+                .frame(width: 34, height: 18)
+                .background(.ultraThinMaterial, in: Capsule())
+                .clipShape(Capsule())
+                .overlay {
+                    Capsule()
+                        .strokeBorder(Color.primary.opacity(isDragging ? 0.18 : 0.1), lineWidth: 0.75)
+                }
+                .scaleEffect(isDragging ? 1.08 : (isHovering ? 1.04 : 1))
+                .shadow(color: .black.opacity(isDragging ? 0.14 : 0.08), radius: isDragging ? 4 : 2, y: 1)
 
                 Capsule()
                     .fill(accentColor)
-                    .frame(width: 2.5, height: 16)
-                    .shadow(color: accentColor.opacity(0.35), radius: 2)
+                    .frame(width: 2, height: 15)
+                    .scaleEffect(x: 1, y: isDragging ? 1.12 : (isHovering ? 1.06 : 1))
+                    .shadow(color: accentColor.opacity(isDragging ? 0.55 : 0.35), radius: isDragging ? 3 : 2)
             }
+            .animation(.easeOut(duration: 0.16), value: isHovering)
+            .animation(.easeOut(duration: 0.12), value: isDragging)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -113,6 +151,7 @@ private struct DraggableMinuteScale: View {
                             let origin = clamped(selectedMinutes)
                             dragOriginMinutes = origin
                             visualMinutes = origin
+                            isDragging = true
                         }
 
                         guard let origin = dragOriginMinutes else { return }
@@ -122,12 +161,14 @@ private struct DraggableMinuteScale: View {
                     }
                     .onEnded { _ in
                         dragOriginMinutes = nil
+                        isDragging = false
                         withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
                             visualMinutes = selectedMinutes
                         }
                     }
             )
             .onHover { isHovering in
+                self.isHovering = isHovering
                 if isHovering {
                     NSCursor.resizeLeftRight.set()
                 } else {
@@ -239,6 +280,7 @@ struct ContentView: View {
                 .minimumScaleFactor(0.62)
                 .foregroundStyle(.primary)
                 .contentTransition(.numericText())
+                .animation(.snappy(duration: 0.18), value: customMinutes)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .accessibilityLabel("Selected duration")
 
