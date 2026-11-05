@@ -60,56 +60,101 @@ private struct GlassResetIcon: View {
     }
 }
 
-private struct MinuteScale: View {
+private struct DraggableMinuteScale: View {
     let maximumMinutes: Int
     let accentColor: Color
     @Binding var selectedMinutes: Double
-    @Binding var hoveredMinute: Int?
-    let start: () -> Void
+
+    @State private var dragOriginMinutes: Double?
+    @State private var visualMinutes: Double = 0
+
+    private let pointsPerMinute: CGFloat = 3.2
+
+    private func clamped(_ minutes: Double) -> Double {
+        min(Double(maximumMinutes), max(0, minutes))
+    }
 
     var body: some View {
-        GeometryReader { geometry in
-            let lastIndex = max(1, maximumMinutes - 1)
-
+        GeometryReader { _ in
             ZStack {
-                ForEach(1...maximumMinutes, id: \.self) { minute in
-                    let isMajor = minute.isMultiple(of: 5)
-                    let isHovered = hoveredMinute == minute
-                    let usableWidth = max(0, geometry.size.width - 2)
-                    let x = maximumMinutes == 1
-                        ? geometry.size.width / 2
-                        : 1 + CGFloat(minute - 1) / CGFloat(lastIndex) * usableWidth
+                Canvas { context, size in
+                    let centerX = size.width / 2
+                    let visibleMinuteCount = Int(ceil(size.width / pointsPerMinute / 2)) + 2
+                    let firstMinute = max(1, Int(floor(visualMinutes)) - visibleMinuteCount)
+                    let lastMinute = min(maximumMinutes, Int(ceil(visualMinutes)) + visibleMinuteCount)
 
-                    Capsule()
-                        .fill(minute <= Int(selectedMinutes) ? accentColor : Color.primary.opacity(0.22))
-                        .frame(
-                            width: 1.8,
-                            height: (isMajor ? 11 : 8) + (isHovered ? 3 : 0)
-                        )
-                        .scaleEffect(isHovered ? 1.16 : 1, anchor: .bottom)
-                        .position(x: x, y: geometry.size.height / 2)
+                    if firstMinute <= lastMinute {
+                        for minute in firstMinute...lastMinute {
+                            let isMajor = minute.isMultiple(of: 5)
+                            let x = centerX + (CGFloat(minute) - CGFloat(visualMinutes)) * pointsPerMinute
+                            let height: CGFloat = isMajor ? 11 : 7
+                            var tick = Path()
+                            tick.move(to: CGPoint(x: x, y: (size.height - height) / 2))
+                            tick.addLine(to: CGPoint(x: x, y: (size.height + height) / 2))
+                            context.stroke(
+                                tick,
+                                with: .color(Color.primary.opacity(isMajor ? 0.38 : 0.22)),
+                                lineWidth: 1.5
+                            )
+                        }
+                    }
                 }
+
+                Capsule()
+                    .fill(accentColor)
+                    .frame(width: 2.5, height: 16)
+                    .shadow(color: accentColor.opacity(0.35), radius: 2)
             }
             .contentShape(Rectangle())
-            .animation(.spring(response: 0.2, dampingFraction: 0.72), value: hoveredMinute)
-            .onContinuousHover { phase in
-                switch phase {
-                case .active(let location):
-                    let width = max(1, geometry.size.width)
-                    let ratio = min(max(0, location.x / width), 1)
-                    let minute = Int(round(ratio * CGFloat(lastIndex))) + 1
-                    hoveredMinute = min(maximumMinutes, max(1, minute))
-                    selectedMinutes = Double(hoveredMinute ?? 1)
-                    NSCursor.pointingHand.set()
-                case .ended:
-                    hoveredMinute = nil
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if dragOriginMinutes == nil {
+                            let origin = clamped(selectedMinutes)
+                            dragOriginMinutes = origin
+                            visualMinutes = origin
+                        }
+
+                        guard let origin = dragOriginMinutes else { return }
+                        let draggedMinutes = origin - Double(value.translation.width / pointsPerMinute)
+                        visualMinutes = clamped(draggedMinutes)
+                        selectedMinutes = clamped(draggedMinutes.rounded())
+                    }
+                    .onEnded { _ in
+                        dragOriginMinutes = nil
+                        withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
+                            visualMinutes = selectedMinutes
+                        }
+                    }
+            )
+            .onHover { isHovering in
+                if isHovering {
+                    NSCursor.resizeLeftRight.set()
+                } else {
                     NSCursor.arrow.set()
                 }
             }
-            .onTapGesture(perform: start)
+            .onAppear {
+                visualMinutes = clamped(selectedMinutes)
+            }
+            .onChange(of: selectedMinutes) { _, newValue in
+                guard dragOriginMinutes == nil else { return }
+                visualMinutes = clamped(newValue)
+            }
             .accessibilityLabel("Timer duration")
             .accessibilityValue("\(Int(selectedMinutes)) minutes")
-            .accessibilityHint("Move over the scale to preview a duration, then click to start")
+            .accessibilityHint("Drag the minute scale left or right to choose a duration")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    selectedMinutes = min(Double(maximumMinutes), selectedMinutes + 1)
+                case .decrement:
+                    selectedMinutes = max(0, selectedMinutes - 1)
+                @unknown default:
+                    break
+                }
+                visualMinutes = selectedMinutes
+            }
         }
     }
 }
@@ -119,7 +164,6 @@ struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var customMinutes: Double = 0
-    @State private var hoveredMinute: Int?
 
     private var isIdle: Bool { model.state == .idle }
     private var canStart: Bool { isIdle && customMinutes > 0 }
@@ -151,30 +195,23 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 6) {
             if isIdle {
-                MinuteScale(
-                    maximumMinutes: maximumMinutes,
-                    accentColor: model.accentColor,
-                    selectedMinutes: $customMinutes,
-                    hoveredMinute: $hoveredMinute,
-                    start: { startTimer() }
-                )
-                .frame(height: 20)
+                idleTimerControls
                 .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
-            }
+            } else {
+                if let sessionStatus = model.sessionStatusText {
+                    Text(sessionStatus)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(timerForeground.opacity(0.88))
+                        .lineLimit(1)
+                        .frame(height: 12)
+                        .transition(.opacity)
+                }
 
-            if !isIdle, let sessionStatus = model.sessionStatusText {
-                Text(sessionStatus)
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(timerForeground.opacity(0.88))
-                    .lineLimit(1)
-                    .frame(height: 12)
-                    .transition(.opacity)
+                timerRow
+                    .zIndex(1)
             }
-
-            timerRow
-                .zIndex(1)
 
             if isIdle {
                 bottomBar
@@ -182,7 +219,7 @@ struct ContentView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, isIdle ? 12 : 10)
+        .padding(.vertical, isIdle ? 10 : 10)
         .frame(width: 230)
         .fixedSize(horizontal: true, vertical: true)
         .background(timerProgressBackground)
@@ -193,21 +230,47 @@ struct ContentView: View {
         .focusable(false)
     }
 
+    private var idleTimerControls: some View {
+        VStack(spacing: 6) {
+            Text(String(format: "%02d:00", Int(customMinutes)))
+                .font(.system(size: 34, weight: .thin, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.62)
+                .foregroundStyle(.primary)
+                .contentTransition(.numericText())
+                .frame(maxWidth: .infinity, alignment: .center)
+                .accessibilityLabel("Selected duration")
+
+            DraggableMinuteScale(
+                maximumMinutes: maximumMinutes,
+                accentColor: model.accentColor,
+                selectedMinutes: $customMinutes
+            )
+            .frame(height: 18)
+
+            Button {
+                startTimer()
+            } label: {
+                GlassIcon(name: "play.fill", color: primaryControlColor, size: 31)
+            }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .disabled(!canStart)
+            .help("Start timer")
+        }
+    }
+
     private var timerRow: some View {
         HStack(spacing: 10) {
             HStack(spacing: 6) {
                 Button {
-                    if isIdle {
-                        startTimer()
-                    } else {
-                        withAnimation(.easeInOut(duration: 0.18)) { model.toggle() }
-                    }
+                    withAnimation(.easeInOut(duration: 0.18)) { model.toggle() }
                 } label: {
                     GlassIcon(name: primaryControlIcon, color: primaryControlColor, size: 35)
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
-                .disabled(isIdle && !canStart)
                 .help(primaryControlHelp)
 
                 if model.state == .running || model.state == .paused {
@@ -227,41 +290,42 @@ struct ContentView: View {
 
             Spacer(minLength: 0)
 
-            Text(isIdle ? String(format: "%02d:00", Int(customMinutes)) : model.timeString)
-                .font(.system(size: isIdle ? 42 : 40, weight: .thin, design: .rounded))
+            Text(model.timeString)
+                .font(.system(size: 40, weight: .thin, design: .rounded))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.62)
-                .foregroundStyle(isIdle ? Color.primary : timerForeground)
+                .foregroundStyle(timerForeground)
                 .shadow(
-                    color: isIdle ? .clear : timerShadowColor,
+                    color: timerShadowColor,
                     radius: 1,
                     x: 0,
                     y: 1
                 )
                 .frame(minWidth: 132, maxWidth: .infinity, alignment: .trailing)
                 .contentTransition(.numericText())
-                .accessibilityLabel(isIdle ? "Selected duration" : "Time remaining")
+                .accessibilityLabel("Time remaining")
         }
         .frame(height: 50)
     }
 
     private var bottomBar: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
+            Menu {
                 ForEach(Array(model.presets.enumerated()), id: \.offset) { _, preset in
-                    Button { startTimer(minutes: preset) } label: {
-                        Text("\(Int(preset))")
-                            .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .frame(width: 28, height: 28)
-                            .liquidGlass()
+                    Button {
+                        startTimer(minutes: preset)
+                    } label: {
+                        Label("\(Int(preset)) minutes", systemImage: "play.fill")
                     }
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .help("Start \(Int(preset)) minute timer")
                 }
+            } label: {
+                GlassIcon(name: "circle.grid.2x2.fill", size: 28)
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Quick presets")
 
             Spacer(minLength: 12)
 

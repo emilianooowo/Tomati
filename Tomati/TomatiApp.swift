@@ -13,12 +13,14 @@ struct TomatiApp: App {
         Settings {
             SettingsView()
                 .environment(TomatiModel.shared)
+                .environment(appDelegate.updaterController)
         }
     }
 }
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
+    let updaterController = UpdaterController()
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     private var settingsWindow: NSWindow?
@@ -26,10 +28,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var isPulseRed = false
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        TomatiModel.shared.updateDockIconVisibility()
+
         let contentView = ContentView().environment(TomatiModel.shared)
         
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 230, height: 142)
+        popover.contentSize = NSSize(width: 230, height: 162)
         popover.behavior = .transient
         popover.animates = true
         popover.contentViewController = NSHostingController(rootView: contentView)
@@ -84,6 +88,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         presentSettingsWindow()
     }
         
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            if let button = statusItem.button {
+                togglePopover(button)
+            }
+        }
+        return true
+    }
+
     private func presentSettingsWindow() {
         if let settingsWindow {
             settingsWindow.makeKeyAndOrderFront(nil)
@@ -93,12 +106,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settingsView = SettingsView()
             .environment(TomatiModel.shared)
+            .environment(updaterController)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 600),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 390),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
+        window.minSize = NSSize(width: 520, height: 390)
+        window.maxSize = NSSize(width: 520, height: 390)
         window.title = "Tomati Settings"
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: settingsView)
@@ -126,7 +142,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updateOvertimePulse(isOvertime: model.state == .overtime)
 
         let targetSize = model.state == .idle
-            ? NSSize(width: 230, height: 142)
+            ? NSSize(width: 230, height: 162)
             : NSSize(width: 230, height: model.activeSession == nil ? 70 : 92)
         if popover.contentSize != targetSize {
             resizePopover(to: targetSize)

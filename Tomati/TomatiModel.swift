@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import ServiceManagement
 
 struct FocusSession: Identifiable, Codable, Equatable {
     var id: UUID = UUID()
@@ -27,12 +28,54 @@ struct FocusSession: Identifiable, Codable, Equatable {
     }
 }
 
+private enum TomatiDefaults {
+    static let presets = [5.0, 15.0, 25.0, 50.0]
+    static let alarmSound = "Ping"
+    static let menuIcon = "tomato"
+    static let maximumMinutes = 60.0
+    static let accentRed = 232.0 / 255.0
+    static let accentGreen = 74.0 / 255.0
+    static let accentBlue = 60.0 / 255.0
+}
+
 @MainActor
 @Observable
 class TomatiModel {
-    static let shared = TomatiModel()
+    static let shared: TomatiModel = {
+        #if DEBUG
+        resetDebugPreferences()
+        #endif
+        return TomatiModel()
+    }()
+
     enum TimerState { case idle, running, paused, overtime }
     enum SessionPhase { case focus, rest }
+
+    private init() {}
+
+    #if DEBUG
+    private static func resetDebugPreferences() {
+        let applicationKeys = [
+            "presets",
+            "focusSessions",
+            "alarmSound",
+            "menuIcon",
+            "maxCustomTime",
+            "accentColorR",
+            "accentColorG",
+            "accentColorB",
+            "launchAtLogin",
+            "showDockIcon"
+        ]
+
+        applicationKeys.forEach(UserDefaults.standard.removeObject(forKey:))
+
+        if #available(macOS 13.0, *), SMAppService.mainApp.status == .enabled {
+            try? SMAppService.mainApp.unregister()
+        }
+    }
+    #endif
+
     
     var state: TimerState = .idle { didSet { updateMenuIcon() } }
     var timeRemaining: TimeInterval = 0
@@ -51,10 +94,11 @@ class TomatiModel {
     
     // MARK: - Ajustes Guardados
     var presets: [Double] = {
-        let defaults = [5.0, 15.0, 25.0, 50.0]
-        guard let saved = UserDefaults.standard.array(forKey: "presets") as? [Double] else { return defaults }
+        guard let saved = UserDefaults.standard.array(forKey: "presets") as? [Double] else {
+            return TomatiDefaults.presets
+        }
         let validValues = saved.prefix(4).filter { $0.isFinite && $0 > 0 }
-        return validValues.isEmpty ? defaults : Array(validValues)
+        return validValues.isEmpty ? TomatiDefaults.presets : Array(validValues)
     }() {
         didSet {
             let sanitizedValues = presets.prefix(4).map { $0.isFinite ? min(max($0, 1), 1_440) : 25 }
@@ -93,8 +137,8 @@ class TomatiModel {
             }
         }
     }
-    
-    var alarmSound: String = UserDefaults.standard.string(forKey: "alarmSound") ?? "Ping" {
+
+    var alarmSound: String = UserDefaults.standard.string(forKey: "alarmSound") ?? TomatiDefaults.alarmSound {
         didSet { UserDefaults.standard.set(alarmSound, forKey: "alarmSound") }
     }
     
@@ -102,7 +146,7 @@ class TomatiModel {
         let validIcons = ["hourglass", "clock", "timer", "circle", "tomato"]
         guard let savedIcon = UserDefaults.standard.string(forKey: "menuIcon"),
               validIcons.contains(savedIcon) else {
-            return "tomato"
+            return TomatiDefaults.menuIcon
         }
         return savedIcon
     }() {
@@ -114,11 +158,13 @@ class TomatiModel {
     
     var maxCustomTime: Double = {
         let savedValue = UserDefaults.standard.double(forKey: "maxCustomTime")
-        guard savedValue.isFinite, savedValue > 0 else { return 60 }
+        guard savedValue.isFinite, savedValue > 0 else { return TomatiDefaults.maximumMinutes }
         return min(savedValue, 1_440)
     }() {
         didSet {
-            let sanitizedValue = maxCustomTime.isFinite ? min(max(maxCustomTime, 1), 1_440) : 60
+            let sanitizedValue = maxCustomTime.isFinite
+                ? min(max(maxCustomTime, 1), 1_440)
+                : TomatiDefaults.maximumMinutes
             if maxCustomTime != sanitizedValue {
                 maxCustomTime = sanitizedValue
             }
@@ -133,7 +179,11 @@ class TomatiModel {
             let b = UserDefaults.standard.double(forKey: "accentColorB")
             return Color(red: r, green: g, blue: b)
         }
-        return .blue
+        return Color(
+            red: TomatiDefaults.accentRed,
+            green: TomatiDefaults.accentGreen,
+            blue: TomatiDefaults.accentBlue
+        )
     }() {
         didSet {
             if let nsColor = NSColor(accentColor).usingColorSpace(.sRGB) {
@@ -144,6 +194,60 @@ class TomatiModel {
         }
     }
     
+    // MARK: - Startup & Dock
+    var launchAtLogin: Bool = {
+        if #available(macOS 13.0, *) {
+            if SMAppService.mainApp.status == .enabled { return true }
+        }
+        return UserDefaults.standard.bool(forKey: "launchAtLogin")
+    }() {
+        didSet {
+            UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+            if #available(macOS 13.0, *) {
+                do {
+                    if launchAtLogin {
+                        if SMAppService.mainApp.status != .enabled {
+                            try SMAppService.mainApp.register()
+                        }
+                    } else {
+                        if SMAppService.mainApp.status == .enabled {
+                            try SMAppService.mainApp.unregister()
+                        }
+                    }
+                } catch {
+                    print("Launch at login registration error: \(error)")
+                }
+            }
+        }
+    }
+
+    var showDockIcon: Bool = UserDefaults.standard.bool(forKey: "showDockIcon") {
+        didSet {
+            UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
+            updateDockIconVisibility()
+        }
+    }
+
+    func updateDockIconVisibility() {
+        guard let app = NSApplication.shared as NSApplication? else { return }
+        let targetPolicy: NSApplication.ActivationPolicy = showDockIcon ? .regular : .accessory
+        if app.activationPolicy() != targetPolicy {
+            app.setActivationPolicy(targetPolicy)
+            if showDockIcon {
+                app.activate(ignoringOtherApps: true)
+            }
+        }
+    }
+
+    func refreshLaunchAtLoginStatus() {
+        if #available(macOS 13.0, *) {
+            let isEnabled = SMAppService.mainApp.status == .enabled
+            if launchAtLogin != isEnabled {
+                launchAtLogin = isEnabled
+            }
+        }
+    }
+
     // MARK: - Lógica Visual
     var progress: Double {
         guard totalDuration > 0 else { return 0 }

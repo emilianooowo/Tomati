@@ -1,0 +1,43 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Tomati</title>
+        <item>
+            <title>2.1.0</title>
+            <pubDate>Thu, 05 Nov 2026 09:46:43 -0600</pubDate>
+            <link>https://github.com/emilianooowo/Tomati</link>
+            <sparkle:version>3</sparkle:version>
+            <sparkle:shortVersionString>2.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## What’s New in Tomati 2.1
+
+Tomati 2.1 makes choosing a timer faster, simplifies Settings, and introduces secure in-app updates.
+
+### New
+
+- Added built-in update checks powered by Sparkle.
+- Added a native **Check for Updates…** button in About Tomati.
+- Added a dedicated **What’s New** section in Settings.
+- Grouped quick presets into a single compact menu.
+- Added clean default values for presets, accent color, alarm sound, and menu bar icon.
+
+### Improvements
+
+- Made the draggable minute scale denser, reducing the distance needed to select longer timers.
+- Simplified the Sessions editor and empty state.
+- Aligned System toggles consistently against the right margin.
+- Reorganized Settings into General, Sessions, System, Sounds, About, and What’s New.
+- Debug builds now start with clean defaults on every run, without affecting saved preferences in release builds.
+
+### Defaults
+
+- Presets: 5, 15, 25, and 50 minutes.
+- Sessions: empty.
+- Accent color: Tomati red.
+- Alarm sound: Ping.
+- Menu bar icon: Tomati.
+]]></description>
+            <enclosure url="https://github.com/emilianooowo/Tomati/releases/download/Tomati-2.1.0/Tomati-2.1.0.zip" length="1380618" type="application/octet-stream" sparkle:edSignature="XSVWj1VgH3Sw6Hcccd+m/8301F/8OaY8sW3KdhmlWToc1CrvHMvEgc5/CN9GEETwCUThEwNKwEr81pLwv1NQAw=="/>
+        </item>
+    </channel>
+</rss>
