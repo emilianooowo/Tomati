@@ -3,6 +3,21 @@
     <channel>
         <title>Tomati</title>
         <item>
+            <title>2.2.0</title>
+            <pubDate>Sun, 08 Nov 2026 22:07:38 -0600</pubDate>
+            <link>https://github.com/emilianooowo/Tomati</link>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>2.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## Novedades de Tomati 2.2.0
+
+- Rediseñé el temporizador con campos editables de minutos y segundos y una ventana compacta con progreso de color.
+- Reorganicé las preferencias: System y Sounds ahora están dentro de General.
+- Ajusté la ventana de Settings al contenido de cada sección y fijé What’s New con desplazamiento interno.
+]]></description>
+            <enclosure url="https://github.com/emilianooowo/Tomati/releases/download/Tomati-2.2.0/Tomati-2.2.0.zip" length="1438944" type="application/octet-stream" sparkle:edSignature="ivI8aKnuETl8PmJB7Lyp4GhitbNpjMhB3d1rSqYAxN0WlPe0nkWxANL8mKqomV9Wmre5MZQOx/AA+Bea6MjjDA=="/>
+        </item>
+        <item>
             <title>2.1.6</title>
             <pubDate>Thu, 05 Nov 2026 10:53:08 -0600</pubDate>
             <link>https://github.com/emilianooowo/Tomati</link>
