@@ -3,6 +3,23 @@
     <channel>
         <title>Tomati</title>
         <item>
+            <title>2.3.0</title>
+            <pubDate>Mon, 09 Nov 2026 19:07:18 -0600</pubDate>
+            <link>https://github.com/emilianooowo/Tomati</link>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>2.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## Novedades de Tomati 2.3.0
+
+- Cada fase de Focus y Break termina con overtime y alarma progresiva; el control de avanzar permite pasar a la siguiente fase.
+- Un indicador muestra la fase activa y la transición siguiente, y el progreso usa el color de acento de la sesión.
+- Rediseñé Sessions como tarjetas compactas con nombres, colores, intervalos y duraciones editables.
+- Ahora se pueden eliminar todos los presets y volver a agregarlos desde Settings.
+- Actualicé los controles de Settings y corregí el cierre inesperado al eliminar la última sesión.
+]]></description>
+            <enclosure url="https://github.com/emilianooowo/Tomati/releases/download/Tomati-2.3.0/Tomati-2.3.0.zip" length="1377263" type="application/octet-stream" sparkle:edSignature="qqae7/U7KYVCJooAj1r1os7SkiwLBnLYRj9NAITXY78cNKP4NpycrqpYyw0kO0vE1TGiYTpVULiEOwPtWoYUCw=="/>
+        </item>
+        <item>
             <title>2.2.0</title>
             <pubDate>Sun, 08 Nov 2026 22:07:38 -0600</pubDate>
             <link>https://github.com/emilianooowo/Tomati</link>
