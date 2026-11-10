@@ -1,6 +1,33 @@
 import SwiftUI
 
-struct LiquidGlassModifier: ViewModifier {
+private enum DurationField: Hashable {
+    case minutes
+    case seconds
+}
+
+struct LiquidGlassSurface<S: Shape>: ViewModifier {
+    let shape: S
+    var interactive = false
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular.interactive(interactive), in: shape)
+        } else {
+            content
+                .background(.ultraThinMaterial, in: shape)
+                .overlay { shape.stroke(Color.primary.opacity(0.08), lineWidth: 0.8) }
+        }
+    }
+}
+
+extension View {
+    func liquidGlass<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
+        modifier(LiquidGlassSurface(shape: shape, interactive: interactive))
+    }
+}
+
+private struct PopoverControlGlass: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(.ultraThinMaterial, in: Circle())
@@ -18,417 +45,303 @@ struct LiquidGlassModifier: ViewModifier {
     }
 }
 
-extension View {
-    func liquidGlass() -> some View { modifier(LiquidGlassModifier()) }
-}
-
 private struct GlassIcon: View {
     let name: String
     var color: Color = .primary
-    var size: CGFloat = 27
+    var size: CGFloat = 30
 
     var body: some View {
         Image(systemName: name)
-            .font(.system(size: size * 0.4, weight: .semibold))
+            .font(.system(size: size * 0.42, weight: .medium))
             .foregroundStyle(color)
             .frame(width: size, height: size)
-            .liquidGlass()
-    }
-}
-
-private struct GlassResetIcon: View {
-    let color: Color
-
-    var body: some View {
-        Image(systemName: "stop.fill")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(color)
-            .frame(width: 22, height: 22)
-            .background(.ultraThinMaterial, in: Circle())
-            .overlay {
-                Circle()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [.white.opacity(0.55), .clear, .black.opacity(0.12)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            }
-            .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
-    }
-}
-
-private struct DraggableMinuteScale: View {
-    let maximumMinutes: Int
-    let accentColor: Color
-    @Binding var selectedMinutes: Double
-
-    @State private var dragOriginMinutes: Double?
-    @State private var visualMinutes: Double = 0
-    @State private var isDragging = false
-    @State private var isHovering = false
-
-    private let pointsPerMinute: CGFloat = 3.2
-
-    private func clamped(_ minutes: Double) -> Double {
-        min(Double(maximumMinutes), max(0, minutes))
-    }
-
-    private func drawScale(
-        context: inout GraphicsContext,
-        size: CGSize,
-        magnification: CGFloat = 1,
-        insideLens: Bool = false
-    ) {
-        let centerX = size.width / 2
-        let minuteSpacing = pointsPerMinute * magnification
-        let visibleMinuteCount = Int(ceil(size.width / minuteSpacing / 2)) + 2
-        let firstMinute = max(1, Int(floor(visualMinutes)) - visibleMinuteCount)
-        let lastMinute = min(maximumMinutes, Int(ceil(visualMinutes)) + visibleMinuteCount)
-
-        guard firstMinute <= lastMinute else { return }
-
-        for minute in firstMinute...lastMinute {
-            let isMajor = minute.isMultiple(of: 5)
-            let distanceFromSelection = abs(CGFloat(minute) - CGFloat(visualMinutes))
-            let proximity = max(0, 1 - (distanceFromSelection / 5))
-            let interactionScale: CGFloat = isDragging ? 1 : (isHovering ? 0.55 : 0)
-            let x = centerX + (CGFloat(minute) - CGFloat(visualMinutes)) * minuteSpacing
-            let baseHeight: CGFloat = isMajor ? 11 : 7
-            let lensBoost: CGFloat = insideLens ? 3 : 0
-            let height = baseHeight + lensBoost + (3 * proximity * interactionScale)
-            let baseOpacity: Double = isMajor ? 0.38 : 0.22
-            let lensOpacity: Double = insideLens ? 0.2 : 0
-            let opacity = min(1, baseOpacity + lensOpacity + (0.28 * Double(proximity) * Double(interactionScale)))
-            let isSelectedTick = insideLens && distanceFromSelection < 0.38
-
-            var tick = Path()
-            tick.move(to: CGPoint(x: x, y: (size.height - height) / 2))
-            tick.addLine(to: CGPoint(x: x, y: (size.height + height) / 2))
-            context.stroke(
-                tick,
-                with: .color(isSelectedTick ? accentColor : Color.primary.opacity(opacity)),
-                lineWidth: isSelectedTick ? 2 : 1.5
-            )
-        }
-    }
-
-    var body: some View {
-        GeometryReader { _ in
-            ZStack {
-                Canvas { context, size in
-                    drawScale(context: &context, size: size)
-                }
-
-                Canvas { context, size in
-                    drawScale(context: &context, size: size, magnification: 1.8, insideLens: true)
-                }
-                .frame(width: 34, height: 18)
-                .background(.ultraThinMaterial, in: Capsule())
-                .clipShape(Capsule())
-                .overlay {
-                    Capsule()
-                        .strokeBorder(Color.primary.opacity(isDragging ? 0.18 : 0.1), lineWidth: 0.75)
-                }
-                .scaleEffect(isDragging ? 1.08 : (isHovering ? 1.04 : 1))
-                .shadow(color: .black.opacity(isDragging ? 0.14 : 0.08), radius: isDragging ? 4 : 2, y: 1)
-
-                Capsule()
-                    .fill(accentColor)
-                    .frame(width: 2, height: 15)
-                    .scaleEffect(x: 1, y: isDragging ? 1.12 : (isHovering ? 1.06 : 1))
-                    .shadow(color: accentColor.opacity(isDragging ? 0.55 : 0.35), radius: isDragging ? 3 : 2)
-            }
-            .animation(.easeOut(duration: 0.16), value: isHovering)
-            .animation(.easeOut(duration: 0.12), value: isDragging)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        if dragOriginMinutes == nil {
-                            let origin = clamped(selectedMinutes)
-                            dragOriginMinutes = origin
-                            visualMinutes = origin
-                            isDragging = true
-                        }
-
-                        guard let origin = dragOriginMinutes else { return }
-                        let draggedMinutes = origin - Double(value.translation.width / pointsPerMinute)
-                        visualMinutes = clamped(draggedMinutes)
-                        selectedMinutes = clamped(draggedMinutes.rounded())
-                    }
-                    .onEnded { _ in
-                        dragOriginMinutes = nil
-                        isDragging = false
-                        withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
-                            visualMinutes = selectedMinutes
-                        }
-                    }
-            )
-            .onHover { isHovering in
-                self.isHovering = isHovering
-                if isHovering {
-                    NSCursor.resizeLeftRight.set()
-                } else {
-                    NSCursor.arrow.set()
-                }
-            }
-            .onAppear {
-                visualMinutes = clamped(selectedMinutes)
-            }
-            .onChange(of: selectedMinutes) { _, newValue in
-                guard dragOriginMinutes == nil else { return }
-                visualMinutes = clamped(newValue)
-            }
-            .accessibilityLabel("Timer duration")
-            .accessibilityValue("\(Int(selectedMinutes)) minutes")
-            .accessibilityHint("Drag the minute scale left or right to choose a duration")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment:
-                    selectedMinutes = min(Double(maximumMinutes), selectedMinutes + 1)
-                case .decrement:
-                    selectedMinutes = max(0, selectedMinutes - 1)
-                @unknown default:
-                    break
-                }
-                visualMinutes = selectedMinutes
-            }
-        }
+            .modifier(PopoverControlGlass())
     }
 }
 
 struct ContentView: View {
     @Environment(TomatiModel.self) private var model
-    @Environment(\.colorScheme) private var colorScheme
 
-    @State private var customMinutes: Double = 0
+    @State private var minutesText = "00"
+    @State private var secondsText = "00"
+    @State private var customMinutes = 0.0
+    @FocusState private var focusedField: DurationField?
 
     private var isIdle: Bool { model.state == .idle }
+    private var isSessionOvertime: Bool { model.state == .overtime && model.activeSession != nil }
     private var canStart: Bool { isIdle && customMinutes > 0 }
-    private var maximumMinutes: Int { max(1, Int(model.maxCustomTime.rounded())) }
-
-    private var timerForeground: Color {
-        if model.state == .overtime { return .red }
-        return model.progress > 0.72 ? model.timerAccentForegroundColor : .primary
+    private var elapsedProgress: Double { min(1, max(0, 1 - model.progress)) }
+    private var durationFontSize: CGFloat {
+        if minutesText.count > 5 { 18 }
+        else if minutesText.count > 3 { 22 }
+        else { 29 }
+    }
+    private var minutesFieldWidth: CGFloat {
+        max(38, CGFloat(minutesText.count) * durationFontSize * 0.6 + 4)
     }
 
-    private var controlForeground: Color {
-        if model.state == .overtime { return .red }
-        return model.progress > 0.23 ? model.timerAccentForegroundColor : .primary
+    private var minutesBinding: Binding<String> {
+        Binding(
+            get: { minutesText },
+            set: { value in
+                minutesText = String(value.filter(\.isNumber).prefix(6))
+                updateDurationFromFields()
+            }
+        )
     }
 
-    private var timerShadowColor: Color {
-        if model.progress > 0.72 { return model.timerAccentOpposingColor.opacity(0.32) }
-        return colorScheme == .light ? .white.opacity(0.42) : .black.opacity(0.35)
+    private var secondsBinding: Binding<String> {
+        Binding(
+            get: { secondsText },
+            set: { value in
+                let digits = String(value.filter(\.isNumber).prefix(2))
+                let seconds = min(59, Int(digits) ?? 0)
+                secondsText = digits.count == 2 && seconds == 59 && (Int(digits) ?? 0) > 59
+                    ? "59"
+                    : digits
+                updateDurationFromFields()
+            }
+        )
+    }
+
+    private func updateDurationFromFields() {
+        let minutes = Double(minutesText) ?? 0
+        let seconds = min(59, Double(secondsText) ?? 0)
+        customMinutes = minutes + seconds / 60
+    }
+
+    private func setDurationFields(minutes: Double) {
+        let totalSeconds = max(0, Int((minutes * 60).rounded()))
+        minutesText = String(format: "%02d", totalSeconds / 60)
+        secondsText = String(format: "%02d", totalSeconds % 60)
+        customMinutes = minutes
+    }
+
+    private func normalizeDurationFields() {
+        let minutes = max(0, Int(minutesText) ?? 0)
+        let seconds = min(59, max(0, Int(secondsText) ?? 0))
+        minutesText = String(format: "%02d", minutes)
+        secondsText = String(format: "%02d", seconds)
+        customMinutes = Double(minutes) + Double(seconds) / 60
+        focusedField = nil
     }
 
     private func startTimer(minutes: Double? = nil) {
-        let duration = minutes ?? customMinutes
-        guard duration > 0, isIdle else { return }
+        if let minutes {
+            setDurationFields(minutes: minutes)
+        } else {
+            normalizeDurationFields()
+        }
 
-        withAnimation(.easeInOut(duration: 0.24)) {
-            customMinutes = duration
+        let duration = minutes ?? customMinutes
+        guard duration.isFinite, duration > 0, isIdle else { return }
+
+        withAnimation(.easeInOut(duration: 0.22)) {
             model.start(minutes: duration)
         }
     }
 
+    private func toggleTimer() {
+        if isSessionOvertime {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                model.advanceToNextSessionPhase()
+            }
+        } else if isIdle {
+            startTimer()
+        } else {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                model.toggle()
+            }
+        }
+    }
+
     var body: some View {
-        VStack(spacing: 6) {
-            if isIdle {
-                idleTimerControls
-                .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
-            } else {
-                if let sessionStatus = model.sessionStatusText {
-                    Text(sessionStatus)
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(timerForeground.opacity(0.88))
-                        .lineLimit(1)
-                        .frame(height: 12)
-                        .transition(.opacity)
+        VStack(spacing: 10) {
+            HStack(spacing: 6) {
+                if isIdle {
+                    durationEntry
+                } else if let phaseLabel = model.sessionPhaseLabel {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(model.timeString)
+                            .font(.system(size: 29, weight: .light, design: .rounded))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                            .accessibilityLabel(model.state == .overtime ? "Overtime" : "Time remaining")
+
+                        Text(phaseLabel)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Session phase: \(phaseLabel)")
+                    }
+                } else {
+                    Text(model.timeString)
+                        .font(.system(size: 29, weight: .light, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .accessibilityLabel("Time remaining")
                 }
 
-                timerRow
-                    .zIndex(1)
+                Spacer(minLength: 0)
+
+                if model.state == .running || model.state == .paused || isSessionOvertime {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            model.stop()
+                        }
+                    } label: {
+                        GlassIcon(name: "stop.fill", size: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .help(model.activeSession == nil ? "Cancel timer" : "Cancel session")
+                }
+
+                Button(action: toggleTimer) {
+                    GlassIcon(name: primaryControlIcon, size: 28)
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .disabled(isIdle && !canStart)
+                .accessibilityLabel(primaryControlHelp)
+                .help(primaryControlHelp)
             }
+            .frame(height: model.sessionPhaseLabel == nil ? 36 : 50)
 
             if isIdle {
                 bottomBar
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, isIdle ? 10 : 10)
-        .frame(width: 230)
-        .fixedSize(horizontal: true, vertical: true)
-        .background(timerProgressBackground)
-        .animation(.easeInOut(duration: 0.24), value: model.state)
-        .onChange(of: model.maxCustomTime) { _, newLimit in
-            customMinutes = min(customMinutes, max(1, newLimit))
-        }
-        .focusable(false)
-    }
-
-    private var idleTimerControls: some View {
-        VStack(spacing: 6) {
-            Text(String(format: "%02d:00", Int(customMinutes)))
-                .font(.system(size: 34, weight: .thin, design: .rounded))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.62)
-                .foregroundStyle(.primary)
-                .contentTransition(.numericText())
-                .animation(.snappy(duration: 0.18), value: customMinutes)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .accessibilityLabel("Selected duration")
-
-            DraggableMinuteScale(
-                maximumMinutes: maximumMinutes,
-                accentColor: model.accentColor,
-                selectedMinutes: $customMinutes
-            )
-            .frame(height: 18)
-
-            Button {
-                startTimer()
-            } label: {
-                GlassIcon(name: "play.fill", color: primaryControlColor, size: 31)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 12)
+        .frame(width: 222)
+        .background {
+            GeometryReader { geometry in
+                if !isIdle {
+                    Rectangle()
+                        .fill(model.timerAccentColor.opacity(0.32))
+                        .frame(width: geometry.size.width * elapsedProgress)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .animation(.linear(duration: 1), value: model.progress)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
             }
-            .buttonStyle(.plain)
-            .focusable(false)
-            .disabled(!canStart)
-            .help("Start timer")
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.state)
+        .onAppear {
+            setDurationFields(minutes: customMinutes)
+        }
+        .onChange(of: model.state) { _, newState in
+            if newState == .idle {
+                setDurationFields(minutes: customMinutes)
+            }
         }
     }
 
-    private var timerRow: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) { model.toggle() }
-                } label: {
-                    GlassIcon(name: primaryControlIcon, color: primaryControlColor, size: 35)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help(primaryControlHelp)
-
-                if model.state == .running || model.state == .paused {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            model.stop()
-                        }
-                    } label: {
-                        GlassResetIcon(color: controlForeground)
-                    }
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .help("Reset timer")
-                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
-                }
-            }
-
-            Spacer(minLength: 0)
-
-            Text(model.timeString)
-                .font(.system(size: 40, weight: .thin, design: .rounded))
+    private var durationEntry: some View {
+        HStack(spacing: 2) {
+            TextField("00", text: minutesBinding)
+                .textFieldStyle(.plain)
+                .font(.system(size: durationFontSize, weight: .light, design: .rounded))
                 .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.62)
-                .foregroundStyle(timerForeground)
-                .shadow(
-                    color: timerShadowColor,
-                    radius: 1,
-                    x: 0,
-                    y: 1
-                )
-                .frame(minWidth: 132, maxWidth: .infinity, alignment: .trailing)
-                .contentTransition(.numericText())
-                .accessibilityLabel("Time remaining")
+                .multilineTextAlignment(.leading)
+                .frame(width: minutesFieldWidth, alignment: .leading)
+                .focused($focusedField, equals: .minutes)
+                .onSubmit { focusedField = .seconds }
+                .accessibilityLabel("Minutes")
+
+            Text(":")
+                .font(.system(size: durationFontSize, weight: .light, design: .rounded))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            TextField("00", text: secondsBinding)
+                .textFieldStyle(.plain)
+                .font(.system(size: durationFontSize, weight: .light, design: .rounded))
+                .monospacedDigit()
+                .multilineTextAlignment(.leading)
+                .frame(width: 42)
+                .focused($focusedField, equals: .seconds)
+                .onSubmit { normalizeDurationFields() }
+                .accessibilityLabel("Seconds")
         }
-        .frame(height: 50)
     }
 
     private var bottomBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 2) {
+            ForEach(Array(model.presets.enumerated()), id: \.offset) { _, preset in
+                Button {
+                    startTimer(minutes: preset)
+                } label: {
+                    Text("\(Int(preset))")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .frame(width: 28, height: 28)
+                        .modifier(PopoverControlGlass())
+                }
+                .buttonStyle(.plain)
+                .help("Start a \(Int(preset))-minute timer")
+            }
+
+            Spacer(minLength: 4)
+
             Menu {
-                ForEach(Array(model.presets.enumerated()), id: \.offset) { _, preset in
-                    Button {
-                        startTimer(minutes: preset)
-                    } label: {
-                        Label("\(Int(preset)) minutes", systemImage: "play.fill")
+                if model.sessions.isEmpty {
+                    Button("Create a Session…") {
+                        showSessionsSettings()
+                    }
+                } else {
+                    ForEach(model.sessions) { session in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.22)) {
+                                model.start(session: session)
+                            }
+                        } label: {
+                            Text("\(session.name.isEmpty ? "Untitled Session" : session.name) · \(session.intervalCount)×")
+                        }
+                    }
+
+                    Divider()
+
+                    Button("Manage Sessions…") {
+                        showSessionsSettings()
                     }
                 }
             } label: {
-                GlassIcon(name: "circle.grid.2x2.fill", size: 28)
+                GlassIcon(name: "rectangle.stack", size: 28)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("Quick presets")
+            .help("Sessions")
 
-            Spacer(minLength: 12)
-
-            HStack(spacing: 6) {
-                Menu {
-                    if model.sessions.isEmpty {
-                        Button("Create a Session…") {
-                            model.settingsSelection = "Sessions"
-                            NotificationCenter.default.post(name: .showTomatiSettings, object: nil)
-                        }
-                    } else {
-                        ForEach(model.sessions) { session in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.24)) {
-                                    model.start(session: session)
-                                }
-                            } label: {
-                                Text("\(session.name.isEmpty ? "Untitled Session" : session.name) · \(session.intervalCount)×")
-                            }
-                        }
-
-                        Divider()
-
-                        Button("Manage Sessions…") {
-                            model.settingsSelection = "Sessions"
-                            NotificationCenter.default.post(name: .showTomatiSettings, object: nil)
-                        }
-                    }
-                } label: {
-                    GlassIcon(name: "rectangle.stack.fill", size: 28)
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .help("Start a session")
-
-                Button {
-                    model.settingsSelection = "General"
-                    NotificationCenter.default.post(name: .showTomatiSettings, object: nil)
-                } label: {
-                    GlassIcon(name: "gearshape.fill", size: 28)
-                }
-                .buttonStyle(.plain)
-                .focusable(false)
-                .help("Settings")
+            Button {
+                model.settingsSelection = "General"
+                NotificationCenter.default.post(name: .showTomatiSettings, object: nil)
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(width: 28, height: 28)
             }
+            .buttonStyle(.plain)
+            .focusable(false)
+            .help("Settings")
         }
-        .frame(height: 28)
+        .frame(height: 30)
+    }
+
+    private func showSessionsSettings() {
+        model.settingsSelection = "Sessions"
+        NotificationCenter.default.post(name: .showTomatiSettings, object: nil)
     }
 
     private var primaryControlIcon: String {
         switch model.state {
         case .idle, .paused: "play.fill"
         case .running: "pause.fill"
-        case .overtime: "stop.fill"
+        case .overtime: model.activeSession == nil ? "stop.fill" : "forward.end.fill"
         }
-    }
-
-    private var primaryControlColor: Color {
-        if isIdle && !canStart { return .secondary.opacity(0.28) }
-        return isIdle ? .primary : controlForeground
     }
 
     private var primaryControlHelp: String {
@@ -436,20 +349,7 @@ struct ContentView: View {
         case .idle: "Start timer"
         case .running: "Pause timer"
         case .paused: "Resume timer"
-        case .overtime: "Stop alarm"
-        }
-    }
-
-    private var timerProgressBackground: some View {
-        GeometryReader { geometry in
-            if !isIdle {
-                model.timerAccentColor
-                    .opacity(0.82)
-                    .frame(width: geometry.size.width * CGFloat(model.progress))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .animation(.linear(duration: 1), value: model.progress)
-                    .transition(.opacity)
-            }
+        case .overtime: model.activeSession == nil ? "Stop timer" : "Advance session phase"
         }
     }
 }

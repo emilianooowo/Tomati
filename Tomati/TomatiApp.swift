@@ -31,9 +31,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         TomatiModel.shared.updateDockIconVisibility()
 
         let contentView = ContentView().environment(TomatiModel.shared)
-        
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 230, height: 162)
+        popover.contentSize = NSSize(width: 222, height: TomatiModel.shared.state == .idle ? 104 : 64)
         popover.behavior = .transient
         popover.animates = true
         popover.contentViewController = NSHostingController(rootView: contentView)
@@ -46,7 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.action = #selector(handleStatusItemClick(_:))
         }
-        
+
         NotificationCenter.default.addObserver(self, selector: #selector(updateMenuIcon), name: NSNotification.Name("UpdateMenuIcon"), object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(showSettingsFromNotification), name: .showTomatiSettings, object: nil)
     }
@@ -75,7 +74,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
         
-        // Si el popover estaba abierto, ciérralo
         if popover.isShown { popover.performClose(nil) }
         
         // Muestra el menú debajo del icono
@@ -98,6 +96,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func presentSettingsWindow() {
+        if popover.isShown { popover.performClose(nil) }
         if let settingsWindow {
             settingsWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -113,8 +112,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.minSize = NSSize(width: 520, height: 390)
-        window.maxSize = NSSize(width: 520, height: 390)
+        window.minSize = NSSize(width: 520, height: 180)
         window.title = "Tomati Settings"
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(rootView: settingsView)
@@ -141,9 +139,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         button.image = generateProgressIcon(iconName: model.menuIcon, progress: currentProgress)
         updateOvertimePulse(isOvertime: model.state == .overtime)
 
-        let targetSize = model.state == .idle
-            ? NSSize(width: 230, height: 162)
-            : NSSize(width: 230, height: model.activeSession == nil ? 70 : 92)
+        let targetHeight: CGFloat
+        if model.state == .idle {
+            targetHeight = 104
+        } else if model.sessionPhaseLabel != nil {
+            targetHeight = 82
+        } else {
+            targetHeight = 64
+        }
+        let targetSize = NSSize(width: 222, height: targetHeight)
         if popover.contentSize != targetSize {
             resizePopover(to: targetSize)
         }
@@ -250,7 +254,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         image.lockFocus()
 
         NSColor.black.setFill()
-        NSBezierPath(ovalIn: NSRect(x: 2, y: 1.5, width: 14, height: 13)).fill()
+        NSBezierPath(ovalIn: NSRect(x: 1.25, y: 1.5, width: 15.5, height: 13)).fill()
 
         let leaves = NSBezierPath()
         leaves.move(to: NSPoint(x: 9, y: 13))
@@ -268,12 +272,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func togglePopover(_ sender: AnyObject?) {
-        if let button = statusItem.button {
-            if popover.isShown {
-                popover.performClose(sender)
-            } else {
-                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                NSApp.activate(ignoringOtherApps: true)
+        guard let button = statusItem.button else { return }
+        if popover.isShown {
+            popover.performClose(sender)
+        } else {
+            NSApp.activate(ignoringOtherApps: true)
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, popover.isShown else { return }
+                popover.contentViewController?.view.window?.makeKey()
             }
         }
     }

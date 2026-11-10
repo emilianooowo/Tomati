@@ -1,213 +1,239 @@
 import SwiftUI
 import AppKit
 
-struct SettingsView: View {
-    @Environment(TomatiModel.self) private var model
+private struct SettingsContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
 
-    var body: some View {
-        NavigationSplitView {
-            VStack(spacing: 3) {
-                SidebarTabButton(
-                    title: "General",
-                    systemImage: "gearshape",
-                    isSelected: model.settingsSelection == "General",
-                    accentColor: model.accentColor,
-                    textColor: model.accentForegroundColor
-                ) {
-                    model.settingsSelection = "General"
-                }
-
-                SidebarTabButton(
-                    title: "Sessions",
-                    systemImage: "rectangle.stack",
-                    isSelected: model.settingsSelection == "Sessions",
-                    accentColor: model.accentColor,
-                    textColor: model.accentForegroundColor
-                ) {
-                    model.settingsSelection = "Sessions"
-                }
-
-                SidebarTabButton(
-                    title: "System",
-                    systemImage: "desktopcomputer",
-                    isSelected: model.settingsSelection == "System",
-                    accentColor: model.accentColor,
-                    textColor: model.accentForegroundColor
-                ) {
-                    model.settingsSelection = "System"
-                }
-
-                SidebarTabButton(
-                    title: "Sounds",
-                    systemImage: "speaker.wave.2",
-                    isSelected: model.settingsSelection == "Sounds",
-                    accentColor: model.accentColor,
-                    textColor: model.accentForegroundColor
-                ) {
-                    model.settingsSelection = "Sounds"
-                }
-
-                Spacer()
-
-                SidebarTabButton(
-                    title: "About",
-                    systemImage: "info.circle",
-                    isSelected: model.settingsSelection == "About",
-                    accentColor: model.accentColor,
-                    textColor: model.accentForegroundColor
-                ) {
-                    model.settingsSelection = "About"
-                }
-
-                SidebarTabButton(
-                    title: "What’s New",
-                    systemImage: "sparkles",
-                    isSelected: model.settingsSelection == "WhatsNew",
-                    accentColor: model.accentColor,
-                    textColor: model.accentForegroundColor
-                ) {
-                    model.settingsSelection = "WhatsNew"
-                }
-            }
-            .padding(8)
-            .frame(maxHeight: .infinity)
-            .navigationSplitViewColumnWidth(min: 130, ideal: 130, max: 130)
-            .toolbar(removing: .sidebarToggle)
-        } detail: {
-            if model.settingsSelection == "Sessions" {
-                SessionsSettingsView()
-            } else if model.settingsSelection == "System" {
-                SystemSettingsView()
-            } else if model.settingsSelection == "Sounds" {
-                SoundsSettingsView()
-            } else if model.settingsSelection == "About" {
-                AboutTomatiView()
-            } else if model.settingsSelection == "WhatsNew" {
-                WhatsNewView()
-            } else {
-                GeneralSettingsView()
-            }
-        }
-        .frame(width: 520, height: 390)
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
-private struct SidebarTabButton: View {
-    let title: String
-    let systemImage: String
-    let isSelected: Bool
-    let accentColor: Color
-    let textColor: Color
-    let action: () -> Void
+private extension View {
+    func reportSettingsContentHeight() -> some View {
+        background {
+            GeometryReader { geometry in
+                Color.clear.preference(key: SettingsContentHeightKey.self, value: geometry.size.height)
+            }
+        }
+    }
+}
 
-    @Environment(\.controlActiveState) private var controlActiveState
-    @State private var isHovering = false
+struct SettingsView: View {
+    @Environment(TomatiModel.self) private var model
+    @State private var measuredContentHeight: CGFloat = 0
 
-    private var isActive: Bool {
-        controlActiveState == .key || controlActiveState == .active
+    private var windowHeight: CGFloat {
+        if model.settingsSelection == "WhatsNew" { return 390 }
+        return measuredContentHeight > 0 ? 61 + measuredContentHeight : 390
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? (isActive ? textColor : .primary) : (isHovering ? .primary : .secondary))
-                    .frame(width: 18)
-
-                Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
-                    .foregroundStyle(isSelected ? (isActive ? textColor : .primary) : .primary)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 28)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isActive ? accentColor : Color.secondary.opacity(0.2))
-                } else if isHovering {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.primary.opacity(0.06))
+        VStack(spacing: 0) {
+            HStack(spacing: 2) {
+                SettingsTabButton(title: "General", systemImage: "gearshape", isSelected: model.settingsSelection == "General") {
+                    model.settingsSelection = "General"
+                }
+                SettingsTabButton(title: "Sessions", systemImage: "rectangle.stack", isSelected: model.settingsSelection == "Sessions") {
+                    model.settingsSelection = "Sessions"
+                }
+                SettingsTabButton(title: "About", systemImage: "info.circle", isSelected: model.settingsSelection == "About") {
+                    model.settingsSelection = "About"
+                }
+                SettingsTabButton(title: "What’s New", systemImage: "sparkles", isSelected: model.settingsSelection == "WhatsNew") {
+                    model.settingsSelection = "WhatsNew"
                 }
             }
-            .contentShape(Rectangle())
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
+            .padding(.bottom, 4)
+
+            Divider()
+
+            Group {
+                if model.settingsSelection == "Sessions" {
+                    SessionsSettingsView()
+                } else if model.settingsSelection == "About" {
+                    AboutTomatiView()
+                } else if model.settingsSelection == "WhatsNew" {
+                    WhatsNewPage()
+                } else {
+                    GeneralSettingsView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(width: 520, height: windowHeight)
+        .background(alignment: .bottom) {
+            SettingsWindowSizer(contentHeight: windowHeight)
+                .frame(width: 1, height: 1)
+                .opacity(0)
+        }
+        .onPreferenceChange(SettingsContentHeightKey.self) { height in
+            guard height > 0 else { return }
+            measuredContentHeight = ceil(height)
+        }
+    }
+}
+
+private struct SettingsTabButton: View {
+    let title: String
+    let systemImage: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 19, weight: .regular))
+
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(isSelected ? Color.blue : Color.secondary)
+            .frame(width: 70, height: 52)
+            .modifier(SettingsTabGlass(isSelected: isSelected))
         }
         .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
+        .focusable(false)
+    }
+}
+
+private struct SettingsOptionRow<Controls: View>: View {
+    let title: String
+    let description: String
+    let controls: Controls
+
+    init(
+        title: String,
+        description: String,
+        @ViewBuilder controls: () -> Controls
+    ) {
+        self.title = title
+        self.description = description
+        self.controls = controls()
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 18) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
+                if !description.isEmpty {
+                    Text(description)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            controls
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+private struct SettingsTabGlass: ViewModifier {
+    let isSelected: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isSelected {
+            content.background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.clear)
+                    .liquidGlass(in: RoundedRectangle(cornerRadius: 10, style: .continuous), interactive: true)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+private struct SettingsPopoverControlGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay {
+                Circle().strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.55), .clear, .black.opacity(0.12)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+            }
+            .shadow(color: .black.opacity(0.14), radius: 3, x: 0, y: 1.5)
+    }
+}
+
+private struct SettingsWindowSizer: NSViewRepresentable {
+    let contentHeight: CGFloat
+
+    func makeNSView(context: Context) -> SettingsSizerNSView {
+        SettingsSizerNSView(contentHeight: contentHeight)
+    }
+
+    func updateNSView(_ view: SettingsSizerNSView, context: Context) {
+        view.contentHeight = contentHeight
+    }
+}
+
+private final class SettingsSizerNSView: NSView {
+    var contentHeight: CGFloat {
+        didSet { resizeWindow() }
+    }
+
+    init(contentHeight: CGFloat) {
+        self.contentHeight = contentHeight
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        resizeWindow()
+    }
+
+    private func resizeWindow() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window else { return }
+            let targetContent = NSRect(x: 0, y: 0, width: 520, height: self.contentHeight)
+            let targetFrame = window.frameRect(forContentRect: targetContent)
+            var frame = window.frame
+            frame.origin.x = frame.midX - targetFrame.width / 2
+            frame.origin.y += frame.height - targetFrame.height
+            frame.size = targetFrame.size
+            window.setFrame(frame, display: true, animate: true)
+        }
     }
 }
 
 private struct GeneralSettingsView: View {
     @Environment(TomatiModel.self) private var model
-
-    private let icons = [
-        MenuIconChoice(id: "hourglass", name: "Hourglass"),
-        MenuIconChoice(id: "clock", name: "Clock"),
-        MenuIconChoice(id: "timer", name: "Timer"),
-        MenuIconChoice(id: "circle", name: "Circle"),
-        MenuIconChoice(id: "tomato", name: "Tomati")
-    ]
+    private let sounds = ["Ping", "Glass", "Basso", "Blow", "Bottle", "Frog", "Tink"]
     var body: some View {
         @Bindable var bindableModel = model
 
         ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("General")
-                    .font(.title2.bold())
+            VStack(alignment: .leading, spacing: 6) {
+                VStack(spacing: 0) {
+                    Text("General")
+                        .font(.title2.bold())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 4)
 
-                settingsSection("Appearance", subtitle: "Choose the accent color and menu bar icon.") {
-                    HStack(spacing: 12) {
+                    SettingsOptionRow(title: "Accent color", description: "Choose the timer’s highlight color.") {
                         ColorPicker("Accent color", selection: $bindableModel.accentColor, supportsOpacity: false)
-
-                        Spacer(minLength: 8)
-
-                        HStack(spacing: 5) {
-                            ForEach(icons) { icon in
-                                Button {
-                                    model.menuIcon = icon.id
-                                } label: {
-                                    MenuIconGlyph(icon: icon.id)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .frame(width: 28, height: 28)
-                                        .background(
-                                            model.menuIcon == icon.id
-                                                ? model.accentColor.opacity(0.18)
-                                                : Color.primary.opacity(0.045),
-                                            in: RoundedRectangle(cornerRadius: 7)
-                                        )
-                                        .overlay {
-                                            RoundedRectangle(cornerRadius: 7)
-                                                .stroke(model.menuIcon == icon.id ? model.accentColor : .clear, lineWidth: 1.5)
-                                        }
-                                }
-                                .buttonStyle(.plain)
-                                .help(icon.name)
-                                .accessibilityLabel(icon.name)
-                            }
-                        }
+                            .labelsHidden()
                     }
-                }
 
-                Divider()
-
-                settingsSection("Presets & Limits", subtitle: "Set the scale limit and your quick timers.") {
-                    HStack(spacing: 14) {
-                        HStack(spacing: 6) {
-                            Text("Scale limit")
-                                .font(.subheadline)
-                            TextField("Minutes", value: $bindableModel.maxCustomTime, format: .number)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 52)
-                            Text("min")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: 8)
-
-                        HStack(spacing: 6) {
+                    SettingsOptionRow(title: "Quick presets", description: "Edit the minute shortcuts in the timer.") {
+                        HStack(spacing: 0) {
                             ForEach(0..<4, id: \.self) { slot in
                                 if slot < model.presets.count {
                                     PresetEditCircle(index: slot)
@@ -217,60 +243,48 @@ private struct GeneralSettingsView: View {
                             }
                         }
                     }
-                }
 
+                    Text("System")
+                        .font(.title3.bold())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 10)
+
+                    SettingsOptionRow(title: "Launch at login", description: "Open Tomati automatically when you log in.") {
+                        Toggle("", isOn: $bindableModel.launchAtLogin).labelsHidden()
+                    }
+
+                    SettingsOptionRow(title: "Show icon in Dock", description: "Display Tomati in the macOS Dock.") {
+                        Toggle("", isOn: $bindableModel.showDockIcon).labelsHidden()
+                    }
+
+                    Text("Sounds")
+                        .font(.title3.bold())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 10)
+
+                    SettingsOptionRow(title: "Alarm sound", description: "Choose and preview the sound played when a timer ends.") {
+                        Picker("Alarm sound", selection: $bindableModel.alarmSound) {
+                            ForEach(sounds, id: \.self) { sound in
+                                Text(sound).tag(sound)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(width: 145, alignment: .trailing)
+                        .onChange(of: model.alarmSound) { _, sound in
+                            model.playSoundPreview(name: sound)
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 22)
-            .padding(.vertical, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .reportSettingsContentHeight()
         }
         .scrollIndicators(.automatic)
-    }
-
-    private func settingsSection<Content: View>(
-        _ title: String,
-        subtitle: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            content()
-        }
-    }
-}
-
-private struct MenuIconChoice: Identifiable {
-    let id: String
-    let name: String
-}
-
-private struct MenuIconGlyph: View {
-    let icon: String
-
-    var body: some View {
-        if icon == "tomato" {
-            ZStack {
-                Ellipse()
-                    .strokeBorder(lineWidth: 1.7)
-                    .frame(width: 16, height: 13)
-                    .offset(y: 1.5)
-
-                Image(systemName: "leaf.fill")
-                    .font(.system(size: 7, weight: .bold))
-                    .rotationEffect(.degrees(-18))
-                    .offset(x: 1, y: -6)
-            }
-            .frame(width: 18, height: 18)
-        } else {
-            Image(systemName: icon)
-        }
+        .onAppear { model.refreshLaunchAtLoginStatus() }
     }
 }
 
@@ -282,212 +296,141 @@ private struct AboutTomatiView: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 80, height: 80)
-                .accessibilityHidden(true)
+        ScrollView {
+            VStack(spacing: 12) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 88, height: 88)
+                    .accessibilityHidden(true)
 
-            Text("Tomati")
-                .font(.title2.bold())
+                VStack(spacing: 3) {
+                    Text("Tomati")
+                        .font(.title2.bold())
+                    Text("Developed by Emiliano Leal")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                    Text("Version \(version)")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                }
 
-            Text("Developed by Emiliano Leal")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Text("Version \(version)")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-
-            Button("Check for Updates…") {
-                updaterController.checkForUpdates()
+                Button("Check for Updates…") {
+                    updaterController.checkForUpdates()
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.blue)
-            .controlSize(.regular)
-            .padding(.top, 4)
+            .padding(.horizontal, 22)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .reportSettingsContentHeight()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(24)
+    }
+}
+
+private struct WhatsNewPage: View {
+    var body: some View {
+        ScrollView {
+            WhatsNewView()
+                .padding(.horizontal, 22)
+                .padding(.top, 14)
+                .padding(.bottom, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .reportSettingsContentHeight()
+                .frame(minHeight: 305, alignment: .top)
+        }
     }
 }
 
 private struct WhatsNewView: View {
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("What’s New")
-                    .font(.title2.bold())
+        VStack(alignment: .leading, spacing: 20) {
+            Text("What’s New")
+                .font(.title2.bold())
 
-                release(
-                    version: "2.1.5",
-                    summary: "A focused refinement of the timer and release history.",
-                    changes: [
-                        "Animated the minute scale while choosing a duration.",
-                        "Simplified session cards.",
-                        "Added a compact release history."
-                    ]
-                )
+            release(
+                version: "2.3.0",
+                summary: "More control over focus sessions and a refreshed Settings experience.",
+                changes: [
+                    "Added progressive alarms and overtime at each Focus and Break transition, with a control to advance to the next phase.",
+                    "Added a clear Focus or Break indicator and session-specific progress color.",
+                    "Redesigned session settings as compact cards with editable names, colors, intervals, and durations.",
+                    "Quick presets can now be removed completely and added again later.",
+                    "Refreshed Settings with native macOS controls and removed the menu bar icon selector.",
+                    "Fixed a crash when deleting the last session."
+                ]
+            )
 
-                release(
-                    version: "2.1",
-                    summary: "A faster timer picker, clearer Settings, and secure updates.",
-                    changes: [
-                        "Made the minute scale compact and draggable.",
-                        "Grouped presets into a single menu.",
-                        "Simplified Sessions and aligned System controls.",
-                        "Added update checks with Sparkle.",
-                        "Added clean defaults for Debug runs."
-                    ]
-                )
+            release(
+                version: "2.2.0",
+                summary: "A simpler timer and a more focused Settings window.",
+                changes: [
+                    "Replaced the minute scale with editable minute and second fields.",
+                    "Added a compact Liquid Glass timer popover with progress fill.",
+                    "Grouped System and Sounds options under General.",
+                    "Made Settings resize to fit each section."
+                ]
+            )
 
-                release(
-                    version: "1.0",
-                    summary: "Tomati arrives as a compact focus timer for the macOS menu bar.",
-                    changes: [
-                        "Choose any timer duration or use a preset.",
-                        "Create focus sessions with automatic breaks.",
-                        "Pause, resume, reset, and follow overtime.",
-                        "Personalize the accent, sounds, and menu bar icon.",
-                        "Keep the timer visible without occupying the Dock."
-                    ]
-                )
-            }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 18)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            release(
+                version: "2.1.5",
+                summary: "A focused refinement of the timer and release history.",
+                changes: [
+                    "Animated the minute scale while choosing a duration.",
+                    "Simplified session cards.",
+                    "Added a compact release history."
+                ]
+            )
+
+            release(
+                version: "2.1",
+                summary: "A faster timer picker, clearer Settings, and secure updates.",
+                changes: [
+                    "Made the minute scale compact and draggable.",
+                    "Grouped presets into a single menu.",
+                    "Simplified Sessions and aligned System controls.",
+                    "Added update checks with Sparkle.",
+                    "Added clean defaults for Debug runs."
+                ]
+            )
+
+            release(
+                version: "1.0",
+                summary: "Tomati arrives as a compact focus timer for the macOS menu bar.",
+                changes: [
+                    "Choose any timer duration or use a preset.",
+                    "Create focus sessions with automatic breaks.",
+                    "Pause, resume, reset, and follow overtime.",
+                    "Personalize the accent, sounds, and menu bar icon.",
+                    "Keep the timer visible without occupying the Dock."
+                ]
+            )
         }
     }
 
     private func release(version: String, summary: String, changes: [String]) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(version)
-                .font(.headline)
+                .font(.title3.bold())
 
             Text(summary)
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 ForEach(changes, id: \.self) { change in
                     HStack(alignment: .firstTextBaseline, spacing: 7) {
                         Text("•")
                             .foregroundStyle(.tertiary)
                         Text(change)
-                            .font(.caption)
+                            .font(.callout)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
         }
-    }
-}
-
-private struct SystemSettingsView: View {
-    @Environment(TomatiModel.self) private var model
-
-    var body: some View {
-        @Bindable var bindableModel = model
-
-        VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("System")
-                    .font(.title2.bold())
-                Text("Configure how Tomati behaves in macOS.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    settingLabel(
-                        "Launch at login",
-                        description: "Open Tomati automatically when you log in."
-                    )
-                    Spacer(minLength: 16)
-                    Toggle("", isOn: $bindableModel.launchAtLogin)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
-
-                Divider()
-
-                HStack {
-                    settingLabel(
-                        "Show icon in Dock",
-                        description: "Display Tomati in the macOS Dock."
-                    )
-                    Spacer(minLength: 16)
-                    Toggle("", isOn: $bindableModel.showDockIcon)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear {
-            model.refreshLaunchAtLoginStatus()
-        }
-    }
-
-    private func settingLabel(_ title: String, description: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(title)
-                .font(.subheadline)
-            Text(description)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct SoundsSettingsView: View {
-    @Environment(TomatiModel.self) private var model
-    private let sounds = ["Ping", "Glass", "Basso", "Blow", "Bottle", "Frog", "Tink"]
-
-    var body: some View {
-        @Bindable var bindableModel = model
-
-        VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Sounds")
-                    .font(.title2.bold())
-                Text("Choose the sound played when a timer finishes.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Alarm sound")
-                        .font(.subheadline)
-                    Text("Hover over an option to hear a preview.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                SoundPicker(
-                    selection: $bindableModel.alarmSound,
-                    sounds: sounds,
-                    onPreview: { model.playSoundPreview(name: $0) }
-                )
-                .frame(width: 140, height: 24)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -510,41 +453,31 @@ private struct PresetEditCircle: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            TextField("", value: presetValue, format: .number)
-                .textFieldStyle(.plain)
-                .multilineTextAlignment(.center)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .frame(width: 36, height: 36)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay {
-                    Circle().strokeBorder(
-                        LinearGradient(
-                            colors: [.white.opacity(0.55), .clear, .black.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-                }
-
-            if isHovering && model.presets.count > 1 {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        model.removePreset(at: index)
+        TextField("", value: presetValue, format: .number)
+            .textFieldStyle(.plain)
+            .multilineTextAlignment(.center)
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .padding(2)
+            .frame(width: 29, height: 29)
+            .modifier(SettingsPopoverControlGlass())
+            .frame(width: 34, height: 34)
+            .overlay(alignment: .topTrailing) {
+                if isHovering && !model.presets.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            model.removePreset(at: index)
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 13))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .red)
                     }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 13))
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(.white, .red)
+                    .buttonStyle(.plain)
+                    .offset(x: 3, y: -3)
                 }
-                .buttonStyle(.plain)
-                .offset(x: 4, y: -4)
             }
-        }
-        .frame(width: 40, height: 40)
-        .onHover { isHovering = $0 }
+            .onHover { isHovering = $0 }
     }
 }
 
@@ -559,25 +492,24 @@ private struct AddPresetCircle: View {
             }
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(.secondary)
-                .frame(width: 36, height: 36)
                 .overlay {
                     Circle()
-                        .strokeBorder(
-                            Color.secondary.opacity(0.5),
-                            style: StrokeStyle(lineWidth: 1.4, dash: [4, 3])
-                        )
+                        .strokeBorder(Color.secondary.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+                        .frame(width: 29, height: 29)
                 }
+                .frame(width: 29, height: 29)
         }
         .buttonStyle(.plain)
-        .frame(width: 40, height: 40)
+        .frame(width: 34, height: 34)
         .help("Add preset")
     }
 }
 
 private struct SessionsSettingsView: View {
     @Environment(TomatiModel.self) private var model
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 3)
 
     var body: some View {
         @Bindable var bindableModel = model
@@ -589,7 +521,7 @@ private struct SessionsSettingsView: View {
                         Text("Sessions")
                             .font(.title2.bold())
                         Text("Alternate focus intervals and breaks.")
-                            .font(.caption)
+                            .font(.callout)
                             .foregroundStyle(.secondary)
                     }
 
@@ -602,9 +534,9 @@ private struct SessionsSettingsView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(model.accentColor)
-                    .controlSize(.small)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(model.accentColor)
+                    .frame(width: 24, height: 24)
                     .help("New session")
                 }
 
@@ -616,17 +548,21 @@ private struct SessionsSettingsView: View {
                     )
                     .frame(maxWidth: .infinity, minHeight: 190)
                 } else {
-                    ForEach(Array(model.sessions.enumerated()), id: \.element.id) { index, session in
-                        SessionEditorCard(
-                            session: $bindableModel.sessions[index],
-                            onDelete: { model.removeSession(id: session.id) }
-                        )
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                        ForEach($bindableModel.sessions) { $session in
+                            SessionEditorCard(
+                                session: $session,
+                                onDelete: { model.removeSession(id: session.id) }
+                            )
+                        }
                     }
                 }
             }
             .padding(.horizontal, 22)
-            .padding(.vertical, 18)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .reportSettingsContentHeight()
         }
     }
 }
@@ -636,14 +572,17 @@ private struct SessionEditorCard: View {
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                TextField("Session name", text: $session.name)
-                    .textFieldStyle(.plain)
-                    .font(.subheadline.weight(.semibold))
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Session name", text: $session.name)
+                .textFieldStyle(.plain)
+                .font(.title3.bold())
+                .lineLimit(1)
 
-                Spacer()
-
+            HStack(spacing: 6) {
+                Text("Change color")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
                 ColorPicker(
                     "Session accent",
                     selection: Binding(
@@ -654,99 +593,64 @@ private struct SessionEditorCard: View {
                 )
                 .labelsHidden()
                 .help("Session accent color")
+            }
 
+            HStack(spacing: 4) {
+                Text("Intervals")
+                    .font(.callout)
+                Spacer(minLength: 0)
+                Stepper(value: $session.intervalCount, in: 1...24) {
+                    Text("\(session.intervalCount)")
+                        .font(.callout)
+                        .monospacedDigit()
+                        .frame(minWidth: 16)
+                }
+                .controlSize(.small)
+                .fixedSize()
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Focus")
+                        .font(.callout)
+                    sessionDurationField(value: $session.focusMinutes)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Break")
+                        .font(.callout)
+                    sessionDurationField(value: $session.breakMinutes)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            HStack {
+                Spacer(minLength: 0)
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
-                        .font(.system(size: 12))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.red)
                 }
                 .buttonStyle(.borderless)
                 .help("Delete session")
             }
-
-            HStack(spacing: 10) {
-                Stepper(value: $session.intervalCount, in: 1...24) {
-                    Text("\(session.intervalCount) intervals")
-                        .font(.caption)
-                        .monospacedDigit()
-                }
-                .frame(width: 120, alignment: .leading)
-
-                Spacer(minLength: 4)
-
-                sessionDurationField("Focus", value: $session.focusMinutes)
-                sessionDurationField("Break", value: $session.breakMinutes)
-            }
         }
-        .padding(11)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 166, alignment: .topLeading)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func sessionDurationField(_ title: String, value: Binding<Double>) -> some View {
-        HStack(spacing: 4) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                TextField("Minutes", value: value, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 46)
-            }
+    private func sessionDurationField(value: Binding<Double>) -> some View {
+        HStack(spacing: 3) {
+            TextField("Minutes", value: value, format: .number)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.leading)
+                .font(.callout)
+                .frame(width: 36)
             Text("min")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .padding(.top, 12)
-        }
-    }
-}
-
-private struct SoundPicker: NSViewRepresentable {
-    @Binding var selection: String
-    let sounds: [String]
-    let onPreview: (String) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    func makeNSView(context: Context) -> NSPopUpButton {
-        let picker = NSPopUpButton(frame: .zero, pullsDown: false)
-        picker.controlSize = .small
-        picker.addItems(withTitles: sounds)
-        picker.selectItem(withTitle: selection)
-        picker.target = context.coordinator
-        picker.action = #selector(Coordinator.didSelect(_:))
-        picker.menu?.delegate = context.coordinator
-        return picker
-    }
-
-    func updateNSView(_ picker: NSPopUpButton, context: Context) {
-        context.coordinator.parent = self
-
-        if picker.itemTitles != sounds {
-            picker.removeAllItems()
-            picker.addItems(withTitles: sounds)
-        }
-        if picker.titleOfSelectedItem != selection {
-            picker.selectItem(withTitle: selection)
-        }
-        picker.menu?.delegate = context.coordinator
-    }
-
-    final class Coordinator: NSObject, NSMenuDelegate {
-        var parent: SoundPicker
-
-        init(parent: SoundPicker) {
-            self.parent = parent
-        }
-
-        @objc func didSelect(_ sender: NSPopUpButton) {
-            guard let selectedSound = sender.titleOfSelectedItem else { return }
-            parent.selection = selectedSound
-        }
-
-        func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
-            guard let sound = item?.title, parent.sounds.contains(sound) else { return }
-            parent.onPreview(sound)
         }
     }
 }

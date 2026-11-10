@@ -98,6 +98,7 @@ class TomatiModel {
             return TomatiDefaults.presets
         }
         let validValues = saved.prefix(4).filter { $0.isFinite && $0 > 0 }
+        if saved.isEmpty { return [] }
         return validValues.isEmpty ? TomatiDefaults.presets : Array(validValues)
     }() {
         didSet {
@@ -143,7 +144,7 @@ class TomatiModel {
     }
     
     var menuIcon: String = {
-        let validIcons = ["hourglass", "clock", "timer", "circle", "tomato"]
+        let validIcons = ["hourglass", "circle", "tomato"]
         guard let savedIcon = UserDefaults.standard.string(forKey: "menuIcon"),
               validIcons.contains(savedIcon) else {
             return TomatiDefaults.menuIcon
@@ -299,8 +300,23 @@ class TomatiModel {
     var sessionStatusText: String? {
         guard let activeSession else { return nil }
         guard let sessionPhase else { return "\(displayName(for: activeSession)) · Complete" }
-        let phaseName = sessionPhase == .focus ? "Focus" : "Rest"
+        let phaseName = sessionPhase == .focus ? "Focus" : "Break"
         return "\(displayName(for: activeSession)) · \(phaseName) \(currentSessionInterval)/\(activeSession.intervalCount)"
+    }
+
+    var sessionPhaseLabel: String? {
+        guard let activeSession, let sessionPhase else { return nil }
+        let currentPhase = sessionPhase == .focus ? "Focus" : "Break"
+        guard state == .overtime else { return currentPhase }
+
+        let nextPhase: String
+        switch sessionPhase {
+        case .focus:
+            nextPhase = currentSessionInterval < activeSession.intervalCount ? "Break" : "Finish"
+        case .rest:
+            nextPhase = "Focus"
+        }
+        return "\(currentPhase) → \(nextPhase)"
     }
     
     private func formatTime(_ interval: TimeInterval) -> String {
@@ -351,8 +367,32 @@ class TomatiModel {
     }
 
     func removePreset(at index: Int) {
-        guard presets.count > 1, presets.indices.contains(index) else { return }
+        guard presets.indices.contains(index) else { return }
         presets.remove(at: index)
+    }
+
+    func advanceToNextSessionPhase() {
+        guard state == .overtime, let activeSession, let sessionPhase else { return }
+
+        stopAudio()
+        overtime = 0
+
+        switch sessionPhase {
+        case .focus:
+            guard currentSessionInterval < activeSession.intervalCount else {
+                stop()
+                return
+            }
+            self.sessionPhase = .rest
+            prepareSegment(minutes: activeSession.breakMinutes)
+        case .rest:
+            currentSessionInterval += 1
+            self.sessionPhase = .focus
+            prepareSegment(minutes: activeSession.focusMinutes)
+        }
+
+        state = .running
+        startTimer()
     }
     
     func toggle() {
@@ -415,26 +455,10 @@ class TomatiModel {
     }
 
     private func advanceSession() {
-        guard let activeSession, let sessionPhase else { return }
-
-        switch sessionPhase {
-        case .focus:
-            if currentSessionInterval >= activeSession.intervalCount {
-                self.sessionPhase = nil
-                state = .overtime
-                playProgressiveAlarm()
-            } else {
-                self.sessionPhase = .rest
-                prepareSegment(minutes: activeSession.breakMinutes)
-                playSound(name: alarmSound, isPreview: true)
-            }
-
-        case .rest:
-            currentSessionInterval += 1
-            self.sessionPhase = .focus
-            prepareSegment(minutes: activeSession.focusMinutes)
-            playSound(name: alarmSound, isPreview: true)
-        }
+        guard activeSession != nil, sessionPhase != nil else { return }
+        overtime = 0
+        state = .overtime
+        playProgressiveAlarm()
     }
 
     private func displayName(for session: FocusSession) -> String {
